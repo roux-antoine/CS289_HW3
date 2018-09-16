@@ -22,6 +22,8 @@ y_valid = y[n_train:]
 
 LAMBDA = 0.001
 
+max_deg = 16
+
 
 def lstsq(A, b, lambda_=0):
     return np.linalg.solve(A.T @ A + lambda_ * np.eye(A.shape[1]), A.T @ b)
@@ -53,21 +55,73 @@ def heatmap(f, clip=5):
     plt.scatter(X[neg, 0], X[neg, 1], c='blue', marker='v')
     plt.show()
 
+def assemble_feature(x, D):
+    n_feature = x.shape[1]
+    Q = [(np.ones(x.shape[0]), 0, 0)]
+    i = 0
+    while Q[i][1] < D:
+        cx, degree, last_index = Q[i]
+        for j in range(last_index, n_feature):
+            Q.append((cx * x[:, j], degree + 1, j))
+        i += 1
+    return np.column_stack([q[0] for q in Q])
+
+
+def fit(X):
+    # Etrain = 0
+    # Evalid = 0
+    cut = int(np.floor(SPLIT*X.shape[0]))
+    train_x = X[0:cut]
+    train_y = y[0:cut]
+    valid_x = X[cut:]
+    valid_y = y[cut:]
+
+    w = lstsq(train_x, train_y, lambda_=LAMBDA)
+    Etrain = np.mean((train_y - train_x @ w)**2)
+    Evalid = np.mean((valid_y - valid_x @ w)**2)
+
+    return np.mean(Etrain), np.mean(Evalid)
+    # return w, np.mean(Etrain), np.mean(Evalid)
+
+
+def question_a():
+    area1 = np.abs(np.ma.masked_equal(y, -1))
+    area2 = np.abs(np.ma.masked_equal(y, 1))
+
+    plt.scatter(X[:,0], X[:,1], s=area1, marker='*')
+    plt.scatter(X[:,0], X[:,1], s=area2, marker='o')
+    # plt.grid()
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
+
+def question_b():
+    # w = np.zeros([max_deg])
+    Etrain = np.zeros(max_deg)
+    Evalid = np.zeros(max_deg)
+    for deg in range(1, max_deg+1):
+        global feat_x
+        feat_x = assemble_feature(X, deg)
+        Etrain[deg-1], Evalid[deg-1] = fit(feat_x)
+
+    plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
+    plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
+    plt.legend()
+    plt.grid()
+    plt.xlabel('degree of polynomial')
+    plt.ylabel('average squared loss')
+    plt.show()
 
 def main():
     # example usage of heatmap
     # heatmap(lambda x0, x1: x0 * x0 + x1 * x1)
-
-    print(X.shape)
-    print(y.shape)
-    area1 = np.abs(np.ma.masked_equal(y, -1))
-    area2 = np.abs(np.ma.masked_equal(y, 1))
-
-    plt.scatter(X[:,0], X[:,1], s=area1, marker='^')
-    plt.scatter(X[:,0], X[:,1], s=area2, marker='o')
+    # question_a()
+    question_b()
 
 
-    plt.show()
+
+
+
 
 
 if __name__ == "__main__":
