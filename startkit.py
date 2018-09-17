@@ -25,9 +25,11 @@ LAMBDA = 0.001
 max_deg = 16
 
 
+def nb_monomials_deg_dim2(deg):
+    return(int(1+1.5*deg+0.5*deg*deg))
+
 def lstsq(A, b, lambda_=0):
     return np.linalg.solve(A.T @ A + lambda_ * np.eye(A.shape[1]), A.T @ b)
-
 
 def heatmap(f, clip=5):
     # example: heatmap(lambda x, y: x * x + y * y)
@@ -66,7 +68,6 @@ def assemble_feature(x, D):
         i += 1
     return np.column_stack([q[0] for q in Q])
 
-
 def fit(X):
     # Etrain = 0
     # Evalid = 0
@@ -80,9 +81,12 @@ def fit(X):
     Etrain = np.mean((train_y - train_x @ w)**2)
     Evalid = np.mean((valid_y - valid_x @ w)**2)
 
-    return np.mean(Etrain), np.mean(Evalid)
-    # return w, np.mean(Etrain), np.mean(Evalid)
+    # return np.mean(Etrain), np.mean(Evalid)
+    return w, np.mean(Etrain), np.mean(Evalid)
 
+
+
+######
 
 def question_a():
     area1 = np.abs(np.ma.masked_equal(y, -1))
@@ -96,13 +100,19 @@ def question_a():
     plt.show()
 
 def question_b():
-    # w = np.zeros([max_deg])
+    w = np.zeros((max_deg, nb_monomials_deg_dim2(max_deg)))
     Etrain = np.zeros(max_deg)
     Evalid = np.zeros(max_deg)
     for deg in range(1, max_deg+1):
         global feat_x
         feat_x = assemble_feature(X, deg)
-        Etrain[deg-1], Evalid[deg-1] = fit(feat_x)
+        w[deg-1, 0:nb_monomials_deg_dim2(deg)], Etrain[deg-1], Evalid[deg-1] = fit(feat_x)
+
+        # y_predicted = (feat_x @ w[deg-1, 0:nb_monomials_deg_dim2(deg)])
+        # plt.plot(y_predicted, 'o', linewidth = 0)
+        # plt.plot(y, 'o', linewidth = 0)
+        # plt.title(deg)
+        # plt.show()
 
     plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
     plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
@@ -112,11 +122,38 @@ def question_b():
     plt.ylabel('average squared loss')
     plt.show()
 
+    ## TODO: qu'est ce que c'est que cette histoire de heatmap...?
+
+def question_c():
+    ## TODO: fonctionne pas...
+    nb_points = X.shape[0]
+    K = np.zeros((nb_points, nb_points))
+
+
+    for deg in range(1, max_deg+1):
+        for i in range(nb_points):
+            for j in range(nb_points):
+                K[i,j] = (1+X[i] @ X[j])**deg
+
+        C = np.linalg.inv(K+LAMBDA*np.eye(nb_points)) @ y
+
+        w = np.zeros(2)
+        for k in range(nb_points):
+            w += C[i]*X[i]
+
+        y_predicted2 = X @ w
+        plt.plot(y_predicted2, 'o', linewidth = 0)
+        plt.show()
+
+
+
+
 def main():
     # example usage of heatmap
     # heatmap(lambda x0, x1: x0 * x0 + x1 * x1)
     # question_a()
-    question_b()
+    # question_b()
+    question_c()
 
 
 
