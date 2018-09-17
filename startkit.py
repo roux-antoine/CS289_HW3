@@ -31,6 +31,7 @@ def nb_monomials_deg_dim2(deg):
 def lstsq(A, b, lambda_=0):
     return np.linalg.solve(A.T @ A + lambda_ * np.eye(A.shape[1]), A.T @ b)
 
+
 def heatmap(f, clip=5):
     # example: heatmap(lambda x, y: x * x + y * y)
     # clip: clip the function range to [-clip, clip] to generate a clean plot
@@ -68,22 +69,26 @@ def assemble_feature(x, D):
         i += 1
     return np.column_stack([q[0] for q in Q])
 
-def fit(X):
-    # Etrain = 0
-    # Evalid = 0
-    cut = int(np.floor(SPLIT*X.shape[0]))
-    train_x = X[0:cut]
-    train_y = y[0:cut]
-    valid_x = X[cut:]
-    valid_y = y[cut:]
+def fit(X_, y_, split, lambda_):
+    cut = int(np.floor(split*X_.shape[0]))
+    train_x = X_[0:cut]
+    train_y = y_[0:cut]
+    valid_x = X_[cut:]
+    valid_y = y_[cut:]
 
-    w = lstsq(train_x, train_y, lambda_=LAMBDA)
+    # print(train_x.shape[0])
+    # print(valid_x.shape[0])
+    # print('--')
+
+    w = lstsq(train_x, train_y, lambda_)
     Etrain = np.mean((train_y - train_x @ w)**2)
     Evalid = np.mean((valid_y - valid_x @ w)**2)
 
-    # return np.mean(Etrain), np.mean(Evalid)
-    return w, np.mean(Etrain), np.mean(Evalid)
+    return w, Etrain, Evalid
 
+def f_heatmap(x, w, d):
+    feat_x = assemble_feature(x, d)
+    return(feat_x @ w)
 
 
 ######
@@ -94,7 +99,6 @@ def question_a():
 
     plt.scatter(X[:,0], X[:,1], s=area1, marker='*')
     plt.scatter(X[:,0], X[:,1], s=area2, marker='o')
-    # plt.grid()
     plt.xlabel('x')
     plt.ylabel('y')
     plt.show()
@@ -106,7 +110,7 @@ def question_b():
     for deg in range(1, max_deg+1):
         global feat_x
         feat_x = assemble_feature(X, deg)
-        w[deg-1, 0:nb_monomials_deg_dim2(deg)], Etrain[deg-1], Evalid[deg-1] = fit(feat_x)
+        w[deg-1, 0:nb_monomials_deg_dim2(deg)], Etrain[deg-1], Evalid[deg-1] = fit(feat_x, y, SPLIT, LAMBDA)
 
         # y_predicted = (feat_x @ w[deg-1, 0:nb_monomials_deg_dim2(deg)])
         # plt.plot(y_predicted, 'o', linewidth = 0)
@@ -114,13 +118,13 @@ def question_b():
         # plt.title(deg)
         # plt.show()
 
-    plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
-    plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
-    plt.legend()
-    plt.grid()
-    plt.xlabel('degree of polynomial')
-    plt.ylabel('average squared loss')
-    plt.show()
+    # plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
+    # plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
+    # plt.legend()
+    # plt.grid()
+    # plt.xlabel('degree of polynomial')
+    # plt.ylabel('average squared loss')
+    # plt.show()
 
     ## TODO: qu'est ce que c'est que cette histoire de heatmap...?
 
@@ -145,6 +149,45 @@ def question_c():
         plt.plot(y_predicted2, 'o', linewidth = 0)
         plt.show()
 
+def question_d():
+
+    nb_splits = 20
+    degs = [5,6]
+    # degs = [5]
+    lambdas = [0.0001, 0.001, 0.01]
+    # lambdas = [0.0001]
+
+    w = np.zeros((max_deg, nb_monomials_deg_dim2(max_deg)))
+    Etrain = np.zeros((nb_splits, len(degs), len(lambdas)))
+    Evalid = np.zeros((nb_splits, len(degs), len(lambdas)))
+
+    for k in range(1, nb_splits):
+        split_value = k/nb_splits
+        for deg in degs:
+            global feat_x
+            feat_x = assemble_feature(X, deg)
+            bundle = np.c_[feat_x, y] #il est probable que le bundle/shuffle ne fonctionne pas bien (l'erreur de valisation ne devrait pas augmenter entre la version shuffled et non-shuffled)
+            np.random.shuffle(bundle)
+            feat_x_shuffled = bundle[:,:-1]
+            y_shuffled = bundle[:, -1]
+            for i in range(len(lambdas)):
+                w[deg-degs[0], 0:nb_monomials_deg_dim2(deg)], Etrain[k, deg-degs[0], i], Evalid[k, deg-degs[0], i] = fit(feat_x_shuffled, y_shuffled, split_value, lambdas[i])
+
+
+    for i in range(len(degs)):
+        for k in range(len(lambdas)):
+            plt.plot(np.linspace(1/nb_splits, 1, nb_splits-1), Etrain[1:,i,k], '-', label = 'Etrain (lambda = {})'. format(lambdas[k]))
+            plt.plot(np.linspace(1/nb_splits, 1, nb_splits-1), Evalid[1:,i,k], '--', label = 'Evalid (lambda = {})'. format(lambdas[k]))
+        plt.legend()
+        plt.title('degree = {}'.format(degs[i]))
+        plt.grid()
+        plt.show()
+    ## pour d = 5
+    # CHELOU: l'erreur de training augmente
+    # MOINS CHELOU: l'erreur de validation diminue (mais elle part de 2 -> chelou)
+    ## pour d = 6
+    # CHELOU: l'erreur de training augmente
+    # MOINS CHELOU: l'erreur de validation diminue mais ne converge pas (mais elle part de 2 -> chelou)
 
 
 
@@ -153,7 +196,8 @@ def main():
     # heatmap(lambda x0, x1: x0 * x0 + x1 * x1)
     # question_a()
     # question_b()
-    question_c()
+    # question_c()
+    question_d()
 
 
 
