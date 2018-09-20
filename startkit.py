@@ -32,7 +32,33 @@ def lstsq(A, b, lambda_=0):
     return np.linalg.solve(A.T @ A + lambda_ * np.eye(A.shape[1]), A.T @ b)
 
 
-def heatmap(f, clip=5):
+# def heatmap(f, clip=5):
+#     # example: heatmap(lambda x, y: x * x + y * y)
+#     # clip: clip the function range to [-clip, clip] to generate a clean plot
+#     #   set it to zero to disable this function
+#
+#     xx0 = xx1 = np.linspace(np.min(X), np.max(X), 72)
+#     x0, x1 = np.meshgrid(xx0, xx1)
+#     x0, x1 = x0.ravel(), x1.ravel()
+#     z0 = f(x0, x1)
+#
+#     if clip:
+#         z0[z0 > clip] = clip
+#         z0[z0 < -clip] = -clip
+#
+#     plt.hexbin(x0, x1, C=z0, gridsize=50, cmap=cm.jet, bins=None)
+#     plt.colorbar()
+#     cs = plt.contour(
+#         xx0, xx1, z0.reshape(xx0.size, xx1.size), [-2, -1, -0.5, 0, 0.5, 1, 2], cmap=cm.jet)
+#     plt.clabel(cs, inline=1, fontsize=10)
+#
+#     pos = y[:] == +1.0
+#     neg = y[:] == -1.0
+#     plt.scatter(X[pos, 0], X[pos, 1], c='red', marker='+')
+#     plt.scatter(X[neg, 0], X[neg, 1], c='blue', marker='v')
+#     plt.show()
+
+def heatmap(deg, w, clip=5):
     # example: heatmap(lambda x, y: x * x + y * y)
     # clip: clip the function range to [-clip, clip] to generate a clean plot
     #   set it to zero to disable this function
@@ -40,7 +66,11 @@ def heatmap(f, clip=5):
     xx0 = xx1 = np.linspace(np.min(X), np.max(X), 72)
     x0, x1 = np.meshgrid(xx0, xx1)
     x0, x1 = x0.ravel(), x1.ravel()
-    z0 = f(x0, x1)
+    # z0 = f(x0, x1)
+    X0 = np.array([x0, x1])
+    X0_feat = assemble_feature(X0.T, deg)
+    z0 = X0_feat @ w[deg, :nb_monomials_deg_dim2(deg)]
+
 
     if clip:
         z0[z0 > clip] = clip
@@ -56,6 +86,7 @@ def heatmap(f, clip=5):
     neg = y[:] == -1.0
     plt.scatter(X[pos, 0], X[pos, 1], c='red', marker='+')
     plt.scatter(X[neg, 0], X[neg, 1], c='blue', marker='v')
+    plt.title('degree = {}'.format(deg))
     plt.show()
 
 def assemble_feature(x, D):
@@ -86,11 +117,6 @@ def fit(X_, y_, split, lambda_):
 
     return w, Etrain, Evalid
 
-def f_heatmap(x, w, d):
-    feat_x = assemble_feature(x, d)
-    return(feat_x @ w)
-
-
 ######
 
 def question_a():
@@ -104,58 +130,101 @@ def question_a():
     plt.show()
 
 def question_b():
+    heatmap_to_plot = [2, 4, 6, 8, 10, 12]
+
     w = np.zeros((max_deg, nb_monomials_deg_dim2(max_deg)))
     Etrain = np.zeros(max_deg)
     Evalid = np.zeros(max_deg)
     for deg in range(1, max_deg+1):
         global feat_x
         feat_x = assemble_feature(X, deg)
-        w[deg-1, 0:nb_monomials_deg_dim2(deg)], Etrain[deg-1], Evalid[deg-1] = fit(feat_x, y, SPLIT, LAMBDA)
+        bundle = np.c_[feat_x, y] #il est probable que le bundle/shuffle ne fonctionne pas bien (l'erreur de valisation ne devrait pas augmenter entre la version shuffled et non-shuffled)
+        np.random.shuffle(bundle)
+        feat_x_shuffled = bundle[:,:-1]
+        y_shuffled = bundle[:, -1]
+        w[deg-1, 0:nb_monomials_deg_dim2(deg)], Etrain[deg-1], Evalid[deg-1] = fit(feat_x_shuffled, y_shuffled, SPLIT, LAMBDA)
 
+        ## plot in 1D a bit useless
         # y_predicted = (feat_x @ w[deg-1, 0:nb_monomials_deg_dim2(deg)])
         # plt.plot(y_predicted, 'o', linewidth = 0)
         # plt.plot(y, 'o', linewidth = 0)
         # plt.title(deg)
         # plt.show()
 
-    # plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
-    # plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
-    # plt.legend()
-    # plt.grid()
-    # plt.xlabel('degree of polynomial')
-    # plt.ylabel('average squared loss')
-    # plt.show()
+        ## plot in 2D heatmap
+    # for deg in heatmap_to_plot:
+        # heatmap(deg, w)
+
+    plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
+    plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
+    plt.legend()
+    plt.grid()
+    plt.xlabel('degree of polynomial')
+    plt.ylabel('average squared loss')
+    plt.semilogy()
+    plt.show()
 
     ## TODO: qu'est ce que c'est que cette histoire de heatmap...?
 
 def question_c():
-    ## TODO: fonctionne pas...
     nb_points = X.shape[0]
-    K = np.zeros((nb_points, nb_points))
+    split = 0.8
+    cut = np.int(nb_points * split)
+    bundle = np.c_[X, y]
+    np.random.shuffle(bundle)
+    X_shuffled = bundle[:,:-1]
+    y_shuffled = bundle[:, -1]
 
+    train_x = X_shuffled[0:cut]
+    train_y = y_shuffled[0:cut]
+    valid_x = X_shuffled[cut:]
+    valid_y = y_shuffled[cut:]
+
+    Etrain = np.zeros(max_deg)
+    Evalid = np.zeros(max_deg)
+
+    K = np.zeros((cut, cut))
 
     for deg in range(1, max_deg+1):
-        for i in range(nb_points):
-            for j in range(nb_points):
-                K[i,j] = (1+X[i] @ X[j])**deg
+        print('degree = ', deg)
+        for i in range(cut):
+            for j in range(cut):
+                K[i,j] = (1+train_x[i] @ train_x[j])**deg
 
-        C = np.linalg.inv(K+LAMBDA*np.eye(nb_points)) @ y
+        C = np.linalg.inv(K+LAMBDA*np.eye(cut)) @ train_y
 
-        w = np.zeros(2)
-        for k in range(nb_points):
-            w += C[i]*X[i]
+        some_vect = np.zeros(cut)
+        y_train_pred = np.zeros(cut)
+        for i in range(cut):
+            for j in range(cut):
+                some_vect[j] = (1+train_x[j].T @ train_x[i])**deg
+            y_train_pred[i] = some_vect @ C
+        Etrain[deg-1] = np.mean((train_y - y_train_pred)**2)
 
-        y_predicted2 = X @ w
-        plt.plot(y_predicted2, 'o', linewidth = 0)
-        plt.show()
+        some_vect = np.zeros(cut)
+        y_valid_pred = np.zeros(nb_points - cut)
+        for i in range(nb_points - cut):
+            for j in range(cut):
+                some_vect[j] = (1+train_x[j].T @ valid_x[i])**deg
+            y_valid_pred[i] = some_vect @ C
+        Evalid[deg-1] = np.mean((valid_y - y_valid_pred)**2)
+
+    plt.plot(range(1, max_deg+1), Etrain, label='Etrain')
+    plt.plot(range(1, max_deg+1), Evalid, label='Evalid')
+    plt.legend()
+    plt.grid()
+    plt.xlabel('degree of polynomial')
+    plt.ylabel('average squared loss')
+    plt.semilogy()
+    plt.show()
 
 def question_d():
 
     nb_splits = 20
-    degs = [5,6]
-    # degs = [5]
-    lambdas = [0.0001, 0.001, 0.01]
-    # lambdas = [0.0001]
+    # degs = [5,6]
+    degs = [5]
+    # lambdas = [0.0001, 0.001, 0.01]
+    lambdas = [0.0001]
 
     w = np.zeros((max_deg, nb_monomials_deg_dim2(max_deg)))
     Etrain = np.zeros((nb_splits, len(degs), len(lambdas)))
@@ -166,7 +235,7 @@ def question_d():
         for deg in degs:
             global feat_x
             feat_x = assemble_feature(X, deg)
-            bundle = np.c_[feat_x, y] #il est probable que le bundle/shuffle ne fonctionne pas bien (l'erreur de valisation ne devrait pas augmenter entre la version shuffled et non-shuffled)
+            bundle = np.c_[feat_x, y]
             np.random.shuffle(bundle)
             feat_x_shuffled = bundle[:,:-1]
             y_shuffled = bundle[:, -1]
